@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AHLCG Merger - Twórz Pliki PDF z Kart</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="background-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <main class="glass-container">
+        <header>
+            <h1>AHLCG <span>Merger</span></h1>
+            <p>Złącz swoje obrazy w profesjonalny, wielostronicowy dokument PDF do druku.</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-target="upload-section">Prześlij z Dysku</button>
+            <button class="tab-btn" data-target="gdrive-section">Link z Google Drive</button>
+        </div>
+
+        <!-- Sekcja 1: Przeciągnij i upuść -->
+        <section id="upload-section" class="content-section active">
+            <div class="drop-zone" id="drop-zone">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <p>Przeciągnij tutaj swoje pliki <strong>.png</strong></p>
+                <span>lub kliknij, by wybrać z dysku</span>
+                <input type="file" id="file-input" multiple accept=".png" hidden>
+            </div>
+            
+            <div class="file-list" id="file-list"></div>
+            
+            <button class="primary-btn action-btn" id="btn-upload" disabled>
+                <span class="btn-text">Generuj PDF z plików</span>
+                <div class="loader hidden"></div>
+            </button>
+        </section>
+
+        <!-- Sekcja 2: Link do Google Drive -->
+        <section id="gdrive-section" class="content-section hidden">
+            <div class="input-group">
+                <label for="gdrive-link">Publiczny folder Google Drive</label>
+                <input type="text" id="gdrive-link" placeholder="Wklej link (np. https://drive.google.com/drive/folders/...)">
+                <small class="helper-text">Upewnij się, że ustawienia prywatności w GDrive są ustawione na "Każda osoba mająca link".</small>
+            </div>
+            
+            <button class="primary-btn action-btn" id="btn-gdrive" disabled>
+                <span class="btn-text">Pobierz i Generuj PDF</span>
+                <div class="loader hidden"></div>
+            </button>
+        </section>
+
+        <!-- Sekcja powiadomień błędów i sukcesów -->
+        <div id="notification-box" class="notification hidden">
+            <span id="notif-message">Rozpoczęto...</span>
+        </div>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

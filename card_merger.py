@@ -18,12 +18,17 @@ def natural_sort_key(s: str) -> List[Any]:
 
 class ProgressList(list):
     """Pomocnicza klasa dziedzicząca po liście, wyświetlająca wskaźnik postępu podczas iteracji."""
+    def __init__(self, iterable, quiet: bool = False):
+        super().__init__(iterable)
+        self.quiet = quiet
+
     def __iter__(self):
         total = len(self)
         for i, item in enumerate(super().__iter__(), 1):
-            percent = (i / total) * 100
-            # \r pozwala na nadpisywanie tej samej linii w konsoli
-            print(f"\rPrzetwarzanie strony: {i}/{total} ({percent:.1f}%)", end="", flush=True)
+            if not self.quiet:
+                percent = (i / total) * 100
+                # \r pozwala na nadpisywanie tej samej linii w konsoli
+                print(f"\rPrzetwarzanie strony: {i}/{total} ({percent:.1f}%)", end="", flush=True)
             yield item
 
 class CardError(Exception):
@@ -118,16 +123,18 @@ class DeckMerger:
                 
         return pages
 
-    def generate_pdf(self, output_path: str) -> Dict[str, Any]:
+    def generate_pdf(self, output_path: str, quiet: bool = False) -> Dict[str, Any]:
         pages = self.build_page_sequence()
         
         if not pages:
             raise CardError("Brak stron do wygenerowania. Upewnij się, że w folderze znajdują się pasujące pliki .png.")
             
-        progress_pages = ProgressList(pages)
+        progress_pages = ProgressList(pages, quiet=quiet)
         pdf_bytes = img2pdf.convert(progress_pages)
         
-        print("\nZapisywanie pliku PDF na dysk...", flush=True)
+        if not quiet:
+            print("\nZapisywanie pliku PDF na dysk...", flush=True)
+            
         with open(output_path, "wb") as f:
             f.write(pdf_bytes)
             
