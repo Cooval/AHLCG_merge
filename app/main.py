@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import gdown
 
-# Konfiguracja ścieżki dla modułu lokalnego
+# Configure path for local module
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -17,7 +17,7 @@ from card_merger import DeckMerger, CardError
 
 app = FastAPI(title="AHLCG Merger API")
 
-# Serwowanie plików frontendowych
+# Serve frontend files
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 @app.get("/")
@@ -25,15 +25,15 @@ async def read_index():
     return FileResponse(str(Path(__file__).parent / "static" / "index.html"))
 
 def cleanup_temp_dir(temp_dir: str):
-    """Asynchroniczne czyszczenie przestrzeni roboczej po zakończeniu zadania."""
+    """Asynchronous cleanup of the workspace after task completion."""
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 @app.post("/api/merge/upload")
 async def merge_upload(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...)):
-    """Endpoint przetwarzający wgrane pliki metodą drag&drop."""
+    """Endpoint processing uploaded files via drag&drop."""
     if not files or len(files) == 0:
-        raise HTTPException(status_code=400, detail="Nie przesłano żadnych plików.")
+        raise HTTPException(status_code=400, detail="No files uploaded.")
         
     temp_dir = tempfile.mkdtemp(prefix="ahlcg_upload_")
     
@@ -43,22 +43,22 @@ async def merge_upload(background_tasks: BackgroundTasks, files: List[UploadFile
             with open(file_path, "wb") as f:
                 shutil.copyfileobj(uploaded_file.file, f)
                 
-        output_pdf_path = os.path.join(temp_dir, "GotoweKarty.pdf")
+        output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
         
         merger = DeckMerger(temp_dir)
         merger.parse_directory()
         
         if len(merger.cards) == 0:
-            raise HTTPException(status_code=400, detail="W przesłanych plikach nie odnaleziono pasujących kart (upewnij się co do rozszerzeń .png oraz wzorca nazw).")
+            raise HTTPException(status_code=400, detail="No matching cards found in uploaded files (check .png extensions and naming patterns).")
             
         stats = merger.generate_pdf(output_pdf_path, quiet=True)
         
-        # Zaplanuj usunięcie folderu tuż po udanym zwrocie pliku użytkownikowi
+        # Schedule folder removal right after successfully returning the file
         background_tasks.add_task(cleanup_temp_dir, temp_dir)
         
         return FileResponse(
             path=output_pdf_path,
-            filename="Karty_Wygenerowane.pdf",
+            filename="Generated_Cards.pdf",
             media_type="application/pdf"
         )
         
@@ -67,22 +67,22 @@ async def merge_upload(background_tasks: BackgroundTasks, files: List[UploadFile
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         cleanup_temp_dir(temp_dir)
-        raise HTTPException(status_code=500, detail=f"Błąd wewnętrzny serwera: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
 @app.post("/api/merge/gdrive")
 async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
-    """Endpoint pobierający i przetwarzający pliki bezpośrednio ze wskazanego publicznego dysku Google."""
+    """Endpoint downloading and processing files directly from a public Google Drive link."""
     if not url:
-        raise HTTPException(status_code=400, detail="Nie podano poprawnego linku.")
+        raise HTTPException(status_code=400, detail="No valid link provided.")
         
     temp_dir = tempfile.mkdtemp(prefix="ahlcg_gdrive_")
     
     try:
-        # use_cookies=False pomaga zablokować gdown przed problemami w czystych kontenerach dockera
+        # use_cookies=False prevents gdown issues in clean docker containers
         gdown.download_folder(url, output=temp_dir, quiet=True, use_cookies=False)
         
-        # Wypłaszczenie struktury (wyciągnięcie plików z ewentualnych podfolderów na dysku google)
+        # Flatten the structure (extract files from possible subfolders on google drive)
         for root, dirs, files in os.walk(temp_dir):
             for file in files:
                 if file.lower().endswith(".png"):
@@ -91,7 +91,7 @@ async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
                     if src != dst:
                         shutil.move(src, dst)
                         
-        output_pdf_path = os.path.join(temp_dir, "GotoweKarty.pdf")
+        output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
         
         merger = DeckMerger(temp_dir)
         merger.parse_directory()
@@ -99,7 +99,7 @@ async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
         if len(merger.cards) == 0:
             raise HTTPException(
                 status_code=400, 
-                detail="W pobranym folderze nie odnaleziono prawidłowych plików graficznych (lub podany link na dysku Google nie jest folderem publicznym typu 'Każda osoba mająca link')."
+                detail="No valid image files found in the downloaded folder (or the Google Drive link is not a public 'Anyone with the link' folder)."
             )
             
         stats = merger.generate_pdf(output_pdf_path, quiet=True)
@@ -108,7 +108,7 @@ async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
         
         return FileResponse(
             path=output_pdf_path,
-            filename="Karty_GoogleDrive.pdf",
+            filename="Cards_GoogleDrive.pdf",
             media_type="application/pdf"
         )
         
@@ -117,4 +117,4 @@ async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         cleanup_temp_dir(temp_dir)
-        raise HTTPException(status_code=400, detail=f"Wystąpił błąd pobierania (link GDrive jest wadliwy lub prywatny): {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Download error occurred (GDrive link is faulty or private): {str(e)}")

@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Zakładki
+    // Tabs
     const tabBtns = document.querySelectorAll('.tab-btn');
     const sections = document.querySelectorAll('.content-section');
 
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Sekcja 1: Przeciągnij i upuść
+    // Section 1: Drag and Drop
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const fileList = document.getElementById('file-list');
@@ -24,12 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleFiles = (files) => {
         const pngFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.png'));
         if (pngFiles.length === 0) {
-            showNotification('Proszę wybrać tylko pliki graficzne w formacie .png', 'error');
+            showNotification('Please select only graphic files in .png format', 'error');
             return;
         }
 
         selectedFiles = pngFiles;
-        fileList.textContent = `Wybrano ${selectedFiles.length} plików.`;
+        fileList.textContent = `${selectedFiles.length} files selected.`;
         btnUpload.disabled = false;
         hideNotification();
     };
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         handleFiles(e.dataTransfer.files);
     });
 
-    // Sekcja 2: Link Google Drive
+    // Section 2: Google Drive Link
     const gdriveInput = document.getElementById('gdrive-link');
     const btnGdrive = document.getElementById('btn-gdrive');
 
@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hideNotification();
     });
 
-    // Powiadomienia
+    // Notifications
     const notifBox = document.getElementById('notification-box');
     const notifMessage = document.getElementById('notif-message');
 
@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         notifBox.classList.add('hidden');
     };
 
-    // Helper do blokowania UI i pokazywania loadera
+    // Helper to block UI and show loader
     const setLoading = (btn, isLoading) => {
         const textSpan = btn.querySelector('.btn-text');
         const loader = btn.querySelector('.loader');
@@ -93,10 +93,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Obsługa pobierania PDF z odpowiedzi serwera
+    // Handle PDF download from server response
     const handleDownload = async (response, defaultFilename) => {
         if (!response.ok) {
-            let errorMsg = 'Wystąpił nieznany błąd';
+            let errorMsg = 'An unknown error occurred';
             try {
                 const errorData = await response.json();
                 errorMsg = errorData.detail || errorMsg;
@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const a = document.createElement('a');
         a.href = url;
         
-        // Próba odczytania nazwy pliku z nagłówków
+        // Attempt to read filename from headers
         let filename = defaultFilename;
         const contentDisposition = response.headers.get('content-disposition');
         if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.URL.revokeObjectURL(url);
     };
 
-    // Akcje
+    // Actions
     btnUpload.addEventListener('click', async () => {
         if (selectedFiles.length === 0) return;
         
@@ -138,8 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: formData
             });
-            await handleDownload(response, 'Gotowe_Karty.pdf');
-            showNotification('Plik PDF został pomyślnie wygenerowany i pobrany!', 'success');
+            await handleDownload(response, 'Ready_Cards.pdf');
+            showNotification('The PDF file has been successfully generated and downloaded!', 'success');
         } catch (error) {
             showNotification(error.message, 'error');
         } finally {
@@ -162,8 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: formData
             });
-            await handleDownload(response, 'Karty_GDrive.pdf');
-            showNotification('Udało się pobrać folder i wygenerować plik PDF!', 'success');
+            await handleDownload(response, 'Cards_GDrive.pdf');
+            showNotification('Successfully downloaded folder and generated PDF!', 'success');
         } catch (error) {
             showNotification(error.message, 'error');
         } finally {

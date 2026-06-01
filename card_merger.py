@@ -6,18 +6,18 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 import img2pdf
 
-# Wyciszamy spam z biblioteki img2pdf dotyczący przezroczystości (alpha channel)
+# Suppress spam from the img2pdf library regarding the alpha channel
 logging.getLogger("img2pdf").setLevel(logging.ERROR)
 
 def natural_sort_key(s: str) -> List[Any]:
     """
-    Zwraca klucz do naturalnego sortowania stringów.
-    Dzięki temu np. 'ahc001-9' będzie przed 'ahc001-10'.
+    Returns a key for natural sorting of strings.
+    This ensures that e.g. 'ahc001-9' comes before 'ahc001-10'.
     """
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
 
 class ProgressList(list):
-    """Pomocnicza klasa dziedzicząca po liście, wyświetlająca wskaźnik postępu podczas iteracji."""
+    """Helper class inheriting from list, displaying a progress indicator during iteration."""
     def __init__(self, iterable, quiet: bool = False):
         super().__init__(iterable)
         self.quiet = quiet
@@ -27,16 +27,16 @@ class ProgressList(list):
         for i, item in enumerate(super().__iter__(), 1):
             if not self.quiet:
                 percent = (i / total) * 100
-                # \r pozwala na nadpisywanie tej samej linii w konsoli
-                print(f"\rPrzetwarzanie strony: {i}/{total} ({percent:.1f}%)", end="", flush=True)
+                # \r allows overwriting the same line in the console
+                print(f"\rProcessing page: {i}/{total} ({percent:.1f}%)", end="", flush=True)
             yield item
 
 class CardError(Exception):
-    """Wyjątek rzucany w przypadku błędów związanych z przetwarzaniem kart."""
+    """Exception raised in case of errors related to card processing."""
     pass
 
 class Card:
-    """Reprezentacja pojedynczej karty posiadającej ewentualny front, back i zadaną ilość."""
+    """Representation of a single card having an optional front, back, and a given quantity."""
     def __init__(self, base_name: str, qty: int = 1):
         self.base_name = base_name
         self.qty = qty
@@ -45,8 +45,8 @@ class Card:
 
 class DeckMerger:
     """
-    Klasa odpowiedzialna za łączenie plików kart w sekwencję stron
-    oraz generowanie z nich pliku PDF.
+    Class responsible for merging card files into a sequence of pages
+    and generating a PDF file from them.
     """
     
     FILENAME_PATTERN = re.compile(r"^(.*?)(?:-x(\d+))?-([^.-]+)\.png$", re.IGNORECASE)
@@ -63,13 +63,13 @@ class DeckMerger:
 
     def parse_directory(self) -> None:
         if not self.input_dir.is_dir():
-            raise CardError(f"Katalog wejściowy nie istnieje: {self.input_dir}")
+            raise CardError(f"Input directory does not exist: {self.input_dir}")
             
         for file_path in self.input_dir.iterdir():
             if not file_path.is_file() or file_path.suffix.lower() != ".png":
                 continue
             
-            # Weryfikacja plików przestarzałych oznaczonych znacznikiem -OLD-
+            # Verification of obsolete files marked with the -OLD- tag
             if "-OLD-" in file_path.name.upper():
                 self.skipped_files.append(file_path.name)
                 continue
@@ -107,14 +107,14 @@ class DeckMerger:
         
         for card in sorted_cards:
             if not card.front_path:
-                raise CardError(f"Brakuje pliku frontu dla karty '{card.base_name}'.")
+                raise CardError(f"Front file missing for card '{card.base_name}'.")
             
             back = card.back_path or self.global_back
             
             if not back:
                 raise CardError(
-                    f"Brakuje pliku tyłu dla karty '{card.base_name}' "
-                    f"i nie znaleziono żadnego domyślnego rewersu w folderze {self.input_dir}."
+                    f"Back file missing for card '{card.base_name}' "
+                    f"and no default card back found in folder {self.input_dir}."
                 )
             
             for _ in range(card.qty):
@@ -127,18 +127,18 @@ class DeckMerger:
         pages = self.build_page_sequence()
         
         if not pages:
-            raise CardError("Brak stron do wygenerowania. Upewnij się, że w folderze znajdują się pasujące pliki .png.")
+            raise CardError("No pages to generate. Make sure the folder contains matching .png files.")
             
         progress_pages = ProgressList(pages, quiet=quiet)
         pdf_bytes = img2pdf.convert(progress_pages)
         
         if not quiet:
-            print("\nZapisywanie pliku PDF na dysk...", flush=True)
+            print("\nSaving PDF file to disk...", flush=True)
             
         with open(output_path, "wb") as f:
             f.write(pdf_bytes)
             
-        # Generowanie statystyk zwrotnych z wykonanej pracy
+        # Generating summary statistics
         repeated_cards = [c for c in self.cards.values() if c.qty > 1]
         
         return {
