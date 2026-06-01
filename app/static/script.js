@@ -93,27 +93,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Handle PDF download from server response
-    const handleDownload = async (response, defaultFilename) => {
-        if (!response.ok) {
-            let errorMsg = 'An unknown error occurred';
-            try {
-                const errorData = await response.json();
-                errorMsg = errorData.detail || errorMsg;
-            } catch(e) {}
-            throw new Error(errorMsg);
-        }
-
-        const blob = await response.blob();
+    // Handle PDF download from blob response
+    const handleDownloadBlob = (blob, defaultFilename, responseHeaders) => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         
-        // Attempt to read filename from headers
         let filename = defaultFilename;
-        const contentDisposition = response.headers.get('content-disposition');
-        if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
-            filename = contentDisposition.split('filename=')[1].replace(/["']/g, '');
+        // The headers string might be available from XHR
+        if (typeof responseHeaders === 'string') {
+            const contentDispositionMatch = responseHeaders.match(/content-disposition:\s*.*filename=["']?([^"';]+)["']?/i);
+            if (contentDispositionMatch && contentDispositionMatch[1]) {
+                filename = contentDispositionMatch[1];
+            }
+        } else if (responseHeaders && responseHeaders.get) {
+            const contentDisposition = responseHeaders.get('content-disposition');
+            if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
+                filename = contentDisposition.split('filename=')[1].replace(/["']/g, '');
+            }
         }
 
         a.download = filename;
@@ -123,28 +120,73 @@ document.addEventListener('DOMContentLoaded', () => {
         window.URL.revokeObjectURL(url);
     };
 
+    // Progress UI Elements
+    const uploadProgressContainer = document.getElementById('upload-progress-container');
+    const uploadProgressBar = document.getElementById('upload-progress-bar');
+    const uploadProgressText = document.getElementById('upload-progress-text');
+    
+    const gdriveProgressContainer = document.getElementById('gdrive-progress-container');
+    const gdriveProgressText = document.getElementById('gdrive-progress-text');
+
     // Actions
-    btnUpload.addEventListener('click', async () => {
+    btnUpload.addEventListener('click', () => {
         if (selectedFiles.length === 0) return;
         
         setLoading(btnUpload, true);
         hideNotification();
+        uploadProgressContainer.classList.remove('hidden');
+        uploadProgressBar.style.width = '0%';
+        uploadProgressText.textContent = 'Uploading files: 0%';
         
         const formData = new FormData();
         selectedFiles.forEach(f => formData.append('files', f));
 
-        try {
-            const response = await fetch('/api/merge/upload', {
-                method: 'POST',
-                body: formData
-            });
-            await handleDownload(response, 'Ready_Cards.pdf');
-            showNotification('The PDF file has been successfully generated and downloaded!', 'success');
-        } catch (error) {
-            showNotification(error.message, 'error');
-        } finally {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/merge/upload', true);
+        xhr.responseType = 'blob'; // Oczekujemy pliku
+
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = Math.round((e.loaded / e.total) * 100);
+                uploadProgressBar.style.width = percentComplete + '%';
+                if (percentComplete < 100) {
+                    uploadProgressText.textContent = `Uploading files: ${percentComplete}%`;
+                } else {
+                    // Kiedy dojdzie do 100%, serwer jeszcze przetwarza obrazki i generuje PDF.
+                    uploadProgressText.textContent = `Upload complete. Generating PDF document, please wait...`;
+                }
+            }
+        };
+
+        xhr.onload = () => {
             setLoading(btnUpload, false);
-        }
+            uploadProgressContainer.classList.add('hidden');
+            
+            if (xhr.status === 200) {
+                handleDownloadBlob(xhr.response, 'Ready_Cards.pdf', xhr.getAllResponseHeaders());
+                showNotification('The PDF file has been successfully generated and downloaded!', 'success');
+            } else {
+                // Jeśli błąd, próbujemy odczytać JSON z blob
+                const reader = new FileReader();
+                reader.onload = () => {
+                    let errorMsg = 'An unknown error occurred';
+                    try {
+                        const errorData = JSON.parse(reader.result);
+                        errorMsg = errorData.detail || errorMsg;
+                    } catch(e) {}
+                    showNotification(errorMsg, 'error');
+                };
+                reader.readAsText(xhr.response);
+            }
+        };
+
+        xhr.onerror = () => {
+            setLoading(btnUpload, false);
+            uploadProgressContainer.classList.add('hidden');
+            showNotification('Network error occurred.', 'error');
+        };
+
+        xhr.send(formData);
     });
 
     btnGdrive.addEventListener('click', async () => {
@@ -153,6 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         setLoading(btnGdrive, true);
         hideNotification();
+        gdriveProgressContainer.classList.remove('hidden');
+        gdriveProgressText.textContent = 'Downloading from Google Drive and generating PDF...';
         
         const formData = new FormData();
         formData.append('url', url);
@@ -162,12 +206,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 body: formData
             });
-            await handleDownload(response, 'Cards_GDrive.pdf');
+            
+            if (!response.ok) {
+                let errorMsg = 'An unknown error occurred';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.detail || errorMsg;
+                } catch(e) {}
+                throw new Error(errorMsg);
+            }
+
+            const blob = await response.blob();
+            handleDownloadBlob(blob, 'Cards_GDrive.pdf', response.headers);
             showNotification('Successfully downloaded folder and generated PDF!', 'success');
         } catch (error) {
             showNotification(error.message, 'error');
         } finally {
             setLoading(btnGdrive, false);
+            gdriveProgressContainer.classList.add('hidden');
         }
     });
 });

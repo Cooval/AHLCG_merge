@@ -42,6 +42,11 @@
             
             <div class="file-list" id="file-list"></div>
             
+            <div class="progress-container hidden" id="upload-progress-container">
+                <div class="progress-bar" id="upload-progress-bar"></div>
+                <div class="progress-text" id="upload-progress-text">0%</div>
+            </div>
+            
             <button class="primary-btn action-btn" id="btn-upload" disabled>
                 <span class="btn-text">Generate PDF from files</span>
                 <div class="loader hidden"></div>
@@ -54,6 +59,11 @@
                 <label for="gdrive-link">Public Google Drive Folder</label>
                 <input type="text" id="gdrive-link" placeholder="Paste link (e.g. https://drive.google.com/drive/folders/...)">
                 <small class="helper-text">Make sure the GDrive privacy setting is set to "Anyone with the link".</small>
+            </div>
+            
+            <div class="progress-container hidden" id="gdrive-progress-container">
+                <div class="progress-bar progress-bar-indeterminate" id="gdrive-progress-bar"></div>
+                <div class="progress-text" id="gdrive-progress-text">Connecting to Google Drive...</div>
             </div>
             
             <button class="primary-btn action-btn" id="btn-gdrive" disabled>

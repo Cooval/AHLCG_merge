@@ -50,6 +50,15 @@ async def merge_upload(background_tasks: BackgroundTasks, files: List[UploadFile
                     zip_ref.extractall(temp_dir)
                 os.remove(file_path)
                 
+        # Flatten the directory structure (pull files out of potential subfolders inside the ZIP)
+        for root, dirs, extracted_files in os.walk(temp_dir):
+            for file in extracted_files:
+                if file.lower().endswith(".png"):
+                    src = os.path.join(root, file)
+                    dst = os.path.join(temp_dir, file)
+                    if src != dst:
+                        shutil.move(src, dst)
+                
         output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
         
         merger = DeckMerger(temp_dir)
