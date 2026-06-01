@@ -22,13 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedFiles = [];
 
     const handleFiles = (files) => {
-        const pngFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.png'));
-        if (pngFiles.length === 0) {
-            showNotification('Please select only graphic files in .png format', 'error');
+        const validFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.png') || f.name.toLowerCase().endsWith('.zip'));
+        if (validFiles.length === 0) {
+            showNotification('Please select only graphic files in .png or .zip format', 'error');
             return;
         }
 
-        selectedFiles = pngFiles;
+        selectedFiles = validFiles;
         fileList.textContent = `${selectedFiles.length} files selected.`;
         btnUpload.disabled = false;
         hideNotification();

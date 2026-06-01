@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+import zipfile
 from pathlib import Path
 from typing import List
 
@@ -42,6 +43,12 @@ async def merge_upload(background_tasks: BackgroundTasks, files: List[UploadFile
             file_path = os.path.join(temp_dir, uploaded_file.filename)
             with open(file_path, "wb") as f:
                 shutil.copyfileobj(uploaded_file.file, f)
+            
+            # If the uploaded file is a ZIP, extract it immediately and delete the archive
+            if uploaded_file.filename.lower().endswith(".zip"):
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                os.remove(file_path)
                 
         output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
         
@@ -117,4 +124,7 @@ async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         cleanup_temp_dir(temp_dir)
-        raise HTTPException(status_code=400, detail=f"Download error occurred (GDrive link is faulty or private): {str(e)}")
+        error_msg = str(e)
+        if "more than 50 files" in error_msg:
+            raise HTTPException(status_code=400, detail="Google Drive public folder block: gdown can't download more than 50 files. Please download the folder as a ZIP file directly from Google Drive and upload it in the 'Upload from Disk' tab.")
+        raise HTTPException(status_code=400, detail=f"Download error occurred (GDrive link is faulty or private): {error_msg}")
