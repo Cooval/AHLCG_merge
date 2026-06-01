@@ -50,7 +50,7 @@ def generate_pdf_thread(temp_dir: str, q: queue.Queue):
         def sse_callback(msg: str):
             q.put(msg)
             
-        stats = merger.generate_pdf(output_pdf_path, quiet=True, callback=sse_callback)
+        stats = merger.generate_pdf(output_pdf_path, quiet=False, callback=sse_callback)
         q.put("DONE")
         
     except Exception as e:
