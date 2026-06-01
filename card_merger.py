@@ -18,17 +18,22 @@ def natural_sort_key(s: str) -> List[Any]:
 
 class ProgressList(list):
     """Helper class inheriting from list, displaying a progress indicator during iteration."""
-    def __init__(self, iterable, quiet: bool = False):
+    def __init__(self, iterable, quiet: bool = False, callback: Optional[Any] = None):
         super().__init__(iterable)
         self.quiet = quiet
+        self.callback = callback
 
     def __iter__(self):
         total = len(self)
         for i, item in enumerate(super().__iter__(), 1):
             if not self.quiet:
                 percent = (i / total) * 100
-                # \r allows overwriting the same line in the console
-                print(f"\rProcessing page: {i}/{total} ({percent:.1f}%)", end="", flush=True)
+                msg = f"Processing page: {i}/{total} ({percent:.1f}%)"
+                if self.callback:
+                    self.callback(msg)
+                else:
+                    # \r allows overwriting the same line in the console
+                    print(f"\r{msg}", end="", flush=True)
             yield item
 
 class CardError(Exception):
@@ -123,17 +128,24 @@ class DeckMerger:
                 
         return pages
 
-    def generate_pdf(self, output_path: str, quiet: bool = False) -> Dict[str, Any]:
+    def generate_pdf(self, output_path: str, quiet: bool = False, callback: Optional[Any] = None) -> Dict[str, Any]:
         pages = self.build_page_sequence()
         
         if not pages:
             raise CardError("No pages to generate. Make sure the folder contains matching .png files.")
             
-        progress_pages = ProgressList(pages, quiet=quiet)
+        progress_pages = ProgressList(pages, quiet=quiet, callback=callback)
+        
+        if callback and not quiet:
+            callback("Starting PDF generation with img2pdf...")
+            
         pdf_bytes = img2pdf.convert(progress_pages)
         
-        if not quiet:
-            print("\nSaving PDF file to disk...", flush=True)
+        msg_saving = "Saving PDF file to disk..."
+        if callback and not quiet:
+            callback(msg_saving)
+        elif not quiet:
+            print(f"\n{msg_saving}", flush=True)
             
         with open(output_path, "wb") as f:
             f.write(pdf_bytes)
@@ -141,10 +153,18 @@ class DeckMerger:
         # Generating summary statistics
         repeated_cards = [c for c in self.cards.values() if c.qty > 1]
         
-        return {
+        stats = {
             "output_path": output_path,
             "total_pages": len(pages),
             "unique_cards": len(self.cards),
             "repeated_cards": repeated_cards,
             "skipped_files": self.skipped_files
         }
+        
+        msg_done = f"Success! PDF generated with {stats['total_pages']} pages across {stats['unique_cards']} unique cards."
+        if callback and not quiet:
+            callback(msg_done)
+        elif not quiet:
+            print(msg_done)
+            
+        return stats

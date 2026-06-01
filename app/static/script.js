@@ -128,6 +128,60 @@ document.addEventListener('DOMContentLoaded', () => {
     const gdriveProgressContainer = document.getElementById('gdrive-progress-container');
     const gdriveProgressText = document.getElementById('gdrive-progress-text');
 
+    const uploadConsole = document.getElementById('upload-console');
+    const gdriveConsole = document.getElementById('gdrive-console');
+
+    const appendLog = (consoleEl, text) => {
+        consoleEl.textContent += text + '\n';
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    };
+
+    const startSSE = (jobId, consoleEl, btn, progressContainer, defaultFilename) => {
+        consoleEl.classList.add('active');
+        consoleEl.textContent = "Waiting for server logs...\n";
+        
+        const eventSource = new EventSource('/api/merge/process/' + jobId);
+        
+        eventSource.onmessage = async (e) => {
+            const data = e.data;
+            if (data === "DONE") {
+                eventSource.close();
+                appendLog(consoleEl, "Processing complete! Downloading PDF...");
+                
+                try {
+                    const dlResponse = await fetch('/api/merge/download/' + jobId);
+                    if (!dlResponse.ok) throw new Error("Download failed");
+                    
+                    const blob = await dlResponse.blob();
+                    handleDownloadBlob(blob, defaultFilename, dlResponse.headers);
+                    showNotification('The PDF file has been successfully generated and downloaded!', 'success');
+                } catch(err) {
+                    showNotification("Failed to download PDF.", 'error');
+                } finally {
+                    setLoading(btn, false);
+                    progressContainer.classList.add('hidden');
+                    consoleEl.classList.remove('active');
+                }
+            } else if (data.startsWith("ERROR:")) {
+                eventSource.close();
+                appendLog(consoleEl, data);
+                showNotification(data.replace("ERROR: ", ""), 'error');
+                setLoading(btn, false);
+                progressContainer.classList.add('hidden');
+            } else {
+                appendLog(consoleEl, data);
+            }
+        };
+        
+        eventSource.onerror = () => {
+            eventSource.close();
+            appendLog(consoleEl, "Connection to server lost.");
+            showNotification("Lost connection during processing.", 'error');
+            setLoading(btn, false);
+            progressContainer.classList.add('hidden');
+        };
+    };
+
     // Actions
     btnUpload.addEventListener('click', () => {
         if (selectedFiles.length === 0) return;
@@ -137,13 +191,15 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadProgressContainer.classList.remove('hidden');
         uploadProgressBar.style.width = '0%';
         uploadProgressText.textContent = 'Uploading files: 0%';
+        uploadConsole.classList.remove('active');
+        uploadConsole.textContent = '';
         
         const formData = new FormData();
         selectedFiles.forEach(f => formData.append('files', f));
 
         const xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/merge/upload', true);
-        xhr.responseType = 'blob'; // Oczekujemy pliku
+        xhr.responseType = 'json';
 
         xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
@@ -152,31 +208,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (percentComplete < 100) {
                     uploadProgressText.textContent = `Uploading files: ${percentComplete}%`;
                 } else {
-                    // Kiedy dojdzie do 100%, serwer jeszcze przetwarza obrazki i generuje PDF.
-                    uploadProgressText.textContent = `Upload complete. Generating PDF document, please wait...`;
+                    uploadProgressText.textContent = `Upload complete. Starting backend processor...`;
                 }
             }
         };
 
         xhr.onload = () => {
-            setLoading(btnUpload, false);
-            uploadProgressContainer.classList.add('hidden');
-            
-            if (xhr.status === 200) {
-                handleDownloadBlob(xhr.response, 'Ready_Cards.pdf', xhr.getAllResponseHeaders());
-                showNotification('The PDF file has been successfully generated and downloaded!', 'success');
+            if (xhr.status === 200 && xhr.response.job_id) {
+                uploadProgressText.textContent = `Server processing...`;
+                startSSE(xhr.response.job_id, uploadConsole, btnUpload, uploadProgressContainer, 'Ready_Cards.pdf');
             } else {
-                // Jeśli błąd, próbujemy odczytać JSON z blob
-                const reader = new FileReader();
-                reader.onload = () => {
-                    let errorMsg = 'An unknown error occurred';
-                    try {
-                        const errorData = JSON.parse(reader.result);
-                        errorMsg = errorData.detail || errorMsg;
-                    } catch(e) {}
-                    showNotification(errorMsg, 'error');
-                };
-                reader.readAsText(xhr.response);
+                let errorMsg = 'An unknown error occurred';
+                if (xhr.response && xhr.response.detail) {
+                    errorMsg = xhr.response.detail;
+                }
+                showNotification(errorMsg, 'error');
+                setLoading(btnUpload, false);
+                uploadProgressContainer.classList.add('hidden');
             }
         };
 
@@ -196,7 +244,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoading(btnGdrive, true);
         hideNotification();
         gdriveProgressContainer.classList.remove('hidden');
-        gdriveProgressText.textContent = 'Downloading from Google Drive and generating PDF...';
+        gdriveProgressText.textContent = 'Downloading from Google Drive and analyzing...';
+        gdriveConsole.classList.remove('active');
+        gdriveConsole.textContent = '';
         
         const formData = new FormData();
         formData.append('url', url);
@@ -216,12 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorMsg);
             }
 
-            const blob = await response.blob();
-            handleDownloadBlob(blob, 'Cards_GDrive.pdf', response.headers);
-            showNotification('Successfully downloaded folder and generated PDF!', 'success');
+            const data = await response.json();
+            if (data.job_id) {
+                gdriveProgressText.textContent = 'Server processing...';
+                startSSE(data.job_id, gdriveConsole, btnGdrive, gdriveProgressContainer, 'Cards_GDrive.pdf');
+            }
         } catch (error) {
             showNotification(error.message, 'error');
-        } finally {
             setLoading(btnGdrive, false);
             gdriveProgressContainer.classList.add('hidden');
         }

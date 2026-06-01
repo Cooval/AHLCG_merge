@@ -2,11 +2,13 @@ import os
 import shutil
 import tempfile
 import zipfile
+import threading
+import queue
 from pathlib import Path
 from typing import List
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import gdown
 
@@ -30,9 +32,52 @@ def cleanup_temp_dir(temp_dir: str):
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
+# Helper function to generate PDF in a thread and send SSE events
+def generate_pdf_thread(temp_dir: str, q: queue.Queue):
+    try:
+        q.put("Parsing directory...")
+        merger = DeckMerger(temp_dir)
+        merger.parse_directory()
+        
+        if len(merger.cards) == 0:
+            q.put("ERROR: No matching cards found in uploaded files (check .png extensions and naming patterns).")
+            return
+            
+        q.put(f"Found {len(merger.cards)} unique cards.")
+        
+        output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
+        
+        def sse_callback(msg: str):
+            q.put(msg)
+            
+        stats = merger.generate_pdf(output_pdf_path, quiet=True, callback=sse_callback)
+        q.put("DONE")
+        
+    except Exception as e:
+        q.put(f"ERROR: {str(e)}")
+
+# Generator for SSE
+def sse_generator(temp_dir: str):
+    q = queue.Queue()
+    thread = threading.Thread(target=generate_pdf_thread, args=(temp_dir, q))
+    thread.start()
+    
+    while True:
+        msg = q.get()
+        if msg.startswith("ERROR:"):
+            yield f"data: {msg}\n\n"
+            break
+        elif msg == "DONE":
+            yield f"data: DONE\n\n"
+            break
+        else:
+            yield f"data: {msg}\n\n"
+            
+    thread.join()
+
 @app.post("/api/merge/upload")
-async def merge_upload(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...)):
-    """Endpoint processing uploaded files via drag&drop."""
+async def merge_upload(files: List[UploadFile] = File(...)):
+    """Endpoint processing uploaded files via drag&drop. Returns job_id for SSE."""
     if not files or len(files) == 0:
         raise HTTPException(status_code=400, detail="No files uploaded.")
         
@@ -58,37 +103,17 @@ async def merge_upload(background_tasks: BackgroundTasks, files: List[UploadFile
                     dst = os.path.join(temp_dir, file)
                     if src != dst:
                         shutil.move(src, dst)
-                
-        output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
+                        
+        return {"job_id": os.path.basename(temp_dir)}
         
-        merger = DeckMerger(temp_dir)
-        merger.parse_directory()
-        
-        if len(merger.cards) == 0:
-            raise HTTPException(status_code=400, detail="No matching cards found in uploaded files (check .png extensions and naming patterns).")
-            
-        stats = merger.generate_pdf(output_pdf_path, quiet=True)
-        
-        # Schedule folder removal right after successfully returning the file
-        background_tasks.add_task(cleanup_temp_dir, temp_dir)
-        
-        return FileResponse(
-            path=output_pdf_path,
-            filename="Generated_Cards.pdf",
-            media_type="application/pdf"
-        )
-        
-    except CardError as e:
-        cleanup_temp_dir(temp_dir)
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         cleanup_temp_dir(temp_dir)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
 @app.post("/api/merge/gdrive")
-async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
-    """Endpoint downloading and processing files directly from a public Google Drive link."""
+async def merge_gdrive(url: str = Form(...)):
+    """Endpoint downloading files directly from a public Google Drive link. Returns job_id for SSE."""
     if not url:
         raise HTTPException(status_code=400, detail="No valid link provided.")
         
@@ -107,33 +132,39 @@ async def merge_gdrive(background_tasks: BackgroundTasks, url: str = Form(...)):
                     if src != dst:
                         shutil.move(src, dst)
                         
-        output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
+        return {"job_id": os.path.basename(temp_dir)}
         
-        merger = DeckMerger(temp_dir)
-        merger.parse_directory()
-        
-        if len(merger.cards) == 0:
-            raise HTTPException(
-                status_code=400, 
-                detail="No valid image files found in the downloaded folder (or the Google Drive link is not a public 'Anyone with the link' folder)."
-            )
-            
-        stats = merger.generate_pdf(output_pdf_path, quiet=True)
-        
-        background_tasks.add_task(cleanup_temp_dir, temp_dir)
-        
-        return FileResponse(
-            path=output_pdf_path,
-            filename="Cards_GoogleDrive.pdf",
-            media_type="application/pdf"
-        )
-        
-    except CardError as e:
-        cleanup_temp_dir(temp_dir)
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         cleanup_temp_dir(temp_dir)
         error_msg = str(e)
         if "more than 50 files" in error_msg:
             raise HTTPException(status_code=400, detail="Google Drive public folder block: gdown can't download more than 50 files. Please download the folder as a ZIP file directly from Google Drive and upload it in the 'Upload from Disk' tab.")
         raise HTTPException(status_code=400, detail=f"Download error occurred (GDrive link is faulty or private): {error_msg}")
+
+
+@app.get("/api/merge/process/{job_id}")
+async def merge_process(job_id: str):
+    """SSE endpoint for streaming processing progress."""
+    temp_dir = os.path.join(tempfile.gettempdir(), job_id)
+    if not os.path.exists(temp_dir):
+        raise HTTPException(status_code=404, detail="Job ID not found")
+        
+    return StreamingResponse(sse_generator(temp_dir), media_type="text/event-stream")
+
+
+@app.get("/api/merge/download/{job_id}")
+async def merge_download(job_id: str, background_tasks: BackgroundTasks):
+    """Endpoint to download the finished PDF."""
+    temp_dir = os.path.join(tempfile.gettempdir(), job_id)
+    output_pdf_path = os.path.join(temp_dir, "Ready_Cards.pdf")
+    
+    if not os.path.exists(output_pdf_path):
+        raise HTTPException(status_code=404, detail="PDF not found or not generated yet")
+        
+    background_tasks.add_task(cleanup_temp_dir, temp_dir)
+    
+    return FileResponse(
+        path=output_pdf_path,
+        filename="Ready_Cards.pdf",
+        media_type="application/pdf"
+    )
