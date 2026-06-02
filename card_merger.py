@@ -139,7 +139,14 @@ class DeckMerger:
         if callback and not quiet:
             callback("Starting PDF generation with img2pdf...")
             
-        pdf_bytes = img2pdf.convert(progress_pages)
+        # Define a fixed page layout of 2.74 x 3.74 inches (standard card size)
+        # This completely ignores broken 72 DPI metadata from source images.
+        layout_fun = img2pdf.get_layout_fun(
+            pagesize=(img2pdf.in_to_pt(2.74), img2pdf.in_to_pt(3.74)),
+            fit=img2pdf.FitMode.into
+        )
+        
+        pdf_bytes = img2pdf.convert(progress_pages, layout_fun=layout_fun)
         
         msg_saving = "Saving PDF file to disk..."
         if callback and not quiet:
