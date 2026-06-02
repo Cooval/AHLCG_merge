@@ -141,12 +141,25 @@ class DeckMerger:
             
         # Define a fixed page layout of 2.74 x 3.74 inches (standard card size)
         # This completely ignores broken 72 DPI metadata from source images.
+        page_width_pt = img2pdf.in_to_pt(2.74)
+        page_height_pt = img2pdf.in_to_pt(3.74)
+        
         layout_fun = img2pdf.get_layout_fun(
-            pagesize=(img2pdf.in_to_pt(2.74), img2pdf.in_to_pt(3.74)),
+            pagesize=(page_width_pt, page_height_pt),
             fit=img2pdf.FitMode.into
         )
         
-        pdf_bytes = img2pdf.convert(progress_pages, layout_fun=layout_fun)
+        # User requested TrimBox 61.2 x 88.4 mm perfectly centered.
+        trim_width_pt = img2pdf.mm_to_pt(61.2)
+        trim_height_pt = img2pdf.mm_to_pt(88.4)
+        
+        trim_margin_x = (page_width_pt - trim_width_pt) / 2.0
+        trim_margin_y = (page_height_pt - trim_height_pt) / 2.0
+        
+        # img2pdf trimborder takes (margin_y, margin_x)
+        trimborder = (trim_margin_y, trim_margin_x)
+        
+        pdf_bytes = img2pdf.convert(progress_pages, layout_fun=layout_fun, trimborder=trimborder)
         
         msg_saving = "Saving PDF file to disk..."
         if callback and not quiet:
