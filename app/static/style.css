@@ -634,7 +634,7 @@ header p {
     border: 1px solid var(--glass-border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     display: block;
-    margin-top: 15px;
+    margin: 15px auto 0 auto;
 }
 
 .guide-img.wide {
