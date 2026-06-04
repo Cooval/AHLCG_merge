@@ -138,7 +138,7 @@ class DeckMerger:
         groups = defaultdict(list)
         for base_name, card in self.cards.items():
             norm = re.sub(r'(?i)alt', '', base_name)
-            norm = re.sub(r'\s*\(.*?\)', '', norm).strip()
+            norm = re.sub(r'\s*\((?![0-9]+\)).*?\)', '', norm).strip()
             groups[norm].append(card)
             
         for norm, cards in groups.items():

@@ -243,7 +243,7 @@ async def merge_resolve_conflicts(job_id: str, request: ResolutionRequest):
     groups = defaultdict(list)
     for base_name, card in merger.cards.items():
         norm = re.sub(r'(?i)alt', '', base_name)
-        norm = re.sub(r'\s*\(.*?\)', '', norm).strip()
+        norm = re.sub(r'\s*\((?![0-9]+\)).*?\)', '', norm).strip()
         groups[norm].append(card)
         
     for norm, cards in groups.items():
