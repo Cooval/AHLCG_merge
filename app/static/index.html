@@ -26,6 +26,7 @@
         <div class="tabs">
             <button class="tab-btn active" data-target="upload-section">Upload from Disk</button>
             <button class="tab-btn" data-target="gdrive-section">Google Drive Link</button>
+            <button class="tab-btn" data-target="printing-guide">MB PRINT Guide</button>
         </div>
 
         <!-- Section 1: Drag and drop -->
@@ -73,6 +74,48 @@
                 <span class="btn-text">Download and Generate PDF</span>
                 <div class="loader hidden"></div>
             </button>
+        </section>
+
+        <!-- Section 3: MB Print Guide -->
+        <section id="printing-guide" class="content-section">
+            <div class="guide-content">
+                <h2>How to order your cards at MB PRINT</h2>
+                <p>Follow these steps to quickly order physical copies of your freshly generated cards.</p>
+                
+                <ol class="guide-steps">
+                    <li>
+                        <strong>Prepare your file link:</strong>
+                        <p>After downloading your ready-to-print PDF file, upload it to a cloud storage service (e.g., Google Drive). Right-click the file, share it, and make sure to select <em>"Anyone with the link"</em>. Copy the link to your clipboard.</p>
+                    </li>
+                    <li>
+                        <strong>Visit MB PRINT:</strong>
+                        <p>Go to the custom game cards printing page: <br><a href="https://mbprint.pl/en/product/custom-game-cards-printing/" target="_blank">mbprint.pl/en/product/custom-game-cards-printing/</a></p>
+                    </li>
+                    <li>
+                        <strong>Configure the parameters:</strong>
+                        <p>Set the printing options exactly as shown in the screenshot below:</p>
+                        <ul>
+                            <li><strong>Cards size:</strong> 61.5×88 mm (2.42×3.46 in)</li>
+                            <li><strong>Number of cards in the deck:</strong> Enter the amount of cards (you can easily calculate this by dividing the number of pages in your PDF by 2).</li>
+                            <li><strong>Number of ordered decks:</strong> Enter how many copies of the deck you want.</li>
+                            <li><strong>Paper weight:</strong> matt paper 300g/m2</li>
+                            <li><strong>Card finishing:</strong> No</li>
+                            <li><strong>Double-sided printed cards:</strong> Double-sided</li>
+                            <li><strong>Rounded corners:</strong> Checked</li>
+                        </ul>
+                        <img src="/static/mbprint_1.png" alt="MB Print Configuration Settings" class="guide-img">
+                    </li>
+                    <li>
+                        <strong>Order prints:</strong>
+                        <p>Click the <em>"Order prints"</em> button at the bottom.</p>
+                    </li>
+                    <li>
+                        <strong>Provide your file:</strong>
+                        <p>In the next section, select your cloud drive icon (e.g., Google Drive) and paste the link you copied in Step 1.</p>
+                        <img src="/static/mbprint_2.png" alt="Paste Google Drive Link" class="guide-img wide">
+                    </li>
+                </ol>
+            </div>
         </section>
 
         <!-- Notification section -->
