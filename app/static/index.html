@@ -130,27 +130,27 @@
     <!-- Modal for resolving conflicts and selecting a global back -->
     <div id="resolution-modal" class="modal hidden">
         <div class="modal-content glass-container">
-            <h2>Wymagana interwencja</h2>
+            <h2>Action Required</h2>
             
             <div id="global-back-section" class="resolution-section hidden">
-                <h3>Wybierz domyślny rewers karty</h3>
-                <p>Nie znaleziono domyślnego pliku 'back.png'. Wybierz jeden z poniższych plików, który posłuży jako rewers dla wszystkich kart bez przypisanego tyłu:</p>
+                <h3>Select default card back</h3>
+                <p>No default 'back.png' file was found. Select one of the files below to serve as the back for all cards without an assigned back:</p>
                 <div class="candidates-grid" id="candidates-grid">
                     <!-- Image candidates will be injected here via JS -->
                 </div>
             </div>
 
             <div id="conflicts-section" class="resolution-section hidden">
-                <h3>Karty wymagające Twojej decyzji</h3>
-                <p>Wykryto kolizje alt, pliki ze znacznikiem OLD lub pliki o niestandardowych nazwach. Wybierz, które wersje mają znaleźć się w wygenerowanym PDF:</p>
+                <h3>Cards requiring your decision</h3>
+                <p>Alt conflicts, files with the OLD marker, or files with non-standard names were detected. Choose which versions should be included in the generated PDF:</p>
                 <div class="conflicts-list" id="conflicts-list">
                     <!-- Conflicts will be injected here via JS -->
                 </div>
             </div>
             
             <div class="modal-actions">
-                <button class="secondary-btn" id="btn-cancel-modal">Anuluj</button>
-                <button class="primary-btn" id="btn-confirm-resolution">Zatwierdź & Generuj</button>
+                <button class="secondary-btn" id="btn-cancel-modal">Cancel</button>
+                <button class="primary-btn" id="btn-confirm-resolution">Confirm & Generate</button>
             </div>
         </div>
     </div>

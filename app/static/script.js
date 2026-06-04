@@ -248,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnConfirmResolution.disabled = false;
             startSSE(currentJobId, currentConsoleEl, currentBtn, currentProgressContainer, currentDefaultFilename);
         } catch (e) {
-            showNotification('Błąd podczas rozwiązywania konfliktów.', 'error');
+            showNotification('Error during conflict resolution.', 'error');
             closeAndResetModal();
             btnConfirmResolution.disabled = false;
         }
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnConfirmResolution.disabled = true;
                 
                 if (!data.back_candidates || data.back_candidates.length === 0) {
-                    showNotification("Nie znaleziono kandydatów na rewers, a część kart nie ma rewersu. Proces przerwany.", "error");
+                    showNotification("No back candidates found, and some cards lack a back. Process aborted.", "error");
                     setLoading(btn, false);
                     progressContainer.classList.add('hidden');
                     return;

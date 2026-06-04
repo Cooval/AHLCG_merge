@@ -149,7 +149,7 @@ class DeckMerger:
                     conflicts.append({
                         "id": f"alt_{norm}",
                         "type": "alt_conflict",
-                        "description": f"Zdublowane karty o tym samym numerze: '{norm}'",
+                        "description": f"Duplicate cards with the same number: '{norm}'",
                         "options": options
                     })
                     
@@ -158,9 +158,9 @@ class DeckMerger:
             conflicts.append({
                 "id": f"old_{p.name}",
                 "type": "skipped_old",
-                "description": f"Pominięta karta OLD: {p.name}",
+                "description": f"Skipped OLD card: {p.name}",
                 "options": [
-                    {"filename": p.name, "label": "Dołącz do wydruku"}
+                    {"filename": p.name, "label": "Include in print"}
                 ]
             })
             
@@ -169,9 +169,9 @@ class DeckMerger:
             conflicts.append({
                 "id": f"unmatched_{p.name}",
                 "type": "skipped_unmatched",
-                "description": f"Plik o nierozpoznanej nazwie: {p.name}",
+                "description": f"Unrecognized file name: {p.name}",
                 "options": [
-                    {"filename": p.name, "label": "Dołącz do wydruku (zostanie dodany jako front)"}
+                    {"filename": p.name, "label": "Include in print (will be added as front)"}
                 ]
             })
             
