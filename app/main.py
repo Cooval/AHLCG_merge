@@ -104,7 +104,14 @@ async def merge_upload(files: List[UploadFile] = File(...)):
                     if src != dst:
                         shutil.move(src, dst)
                         
-        return {"job_id": os.path.basename(temp_dir)}
+        merger = DeckMerger(temp_dir)
+        merger.parse_directory()
+        
+        if merger.needs_global_back() and not merger.global_back:
+            candidates = merger.get_back_candidates()
+            return {"job_id": os.path.basename(temp_dir), "status": "needs_back", "candidates": candidates}
+            
+        return {"job_id": os.path.basename(temp_dir), "status": "ready"}
         
     except Exception as e:
         cleanup_temp_dir(temp_dir)
@@ -132,7 +139,14 @@ async def merge_gdrive(url: str = Form(...)):
                     if src != dst:
                         shutil.move(src, dst)
                         
-        return {"job_id": os.path.basename(temp_dir)}
+        merger = DeckMerger(temp_dir)
+        merger.parse_directory()
+        
+        if merger.needs_global_back() and not merger.global_back:
+            candidates = merger.get_back_candidates()
+            return {"job_id": os.path.basename(temp_dir), "status": "needs_back", "candidates": candidates}
+            
+        return {"job_id": os.path.basename(temp_dir), "status": "ready"}
         
     except Exception as e:
         cleanup_temp_dir(temp_dir)
@@ -168,3 +182,29 @@ async def merge_download(job_id: str, background_tasks: BackgroundTasks):
         filename="Ready_Cards.pdf",
         media_type="application/pdf"
     )
+
+@app.get("/api/merge/preview/{job_id}/{filename}")
+async def merge_preview(job_id: str, filename: str):
+    """Endpoint to fetch a thumbnail of a candidate card back."""
+    temp_dir = os.path.join(tempfile.gettempdir(), job_id)
+    file_path = os.path.join(temp_dir, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+        
+    return FileResponse(path=file_path)
+
+@app.post("/api/merge/select_back/{job_id}")
+async def merge_select_back(job_id: str, filename: str = Form(...)):
+    """Endpoint to set the selected file as the global back."""
+    temp_dir = os.path.join(tempfile.gettempdir(), job_id)
+    file_path = os.path.join(temp_dir, filename)
+    
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Selected image not found")
+        
+    # Rename the selected file to "back.png" so DeckMerger finds it automatically
+    dest_path = os.path.join(temp_dir, "back.png")
+    shutil.move(file_path, dest_path)
+    
+    return {"status": "success"}

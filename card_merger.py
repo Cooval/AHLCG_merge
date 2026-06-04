@@ -106,6 +106,24 @@ class DeckMerger:
             elif side_flag in self.BACK_FLAGS:
                 card.back_path = file_path
 
+    def needs_global_back(self) -> bool:
+        """Returns True if there is at least one card that requires a global back."""
+        for card in self.cards.values():
+            if not card.back_path:
+                return True
+        return False
+
+    def get_back_candidates(self) -> List[str]:
+        """Returns a list of filenames that are candidates for a global back."""
+        candidates = []
+        for file_path in self.input_dir.iterdir():
+            if not file_path.is_file() or file_path.suffix.lower() != ".png":
+                continue
+            name = file_path.name
+            if name.startswith("_") or "back" in name.lower():
+                candidates.append(name)
+        return candidates
+
     def build_page_sequence(self) -> List[str]:
         pages: List[str] = []
         sorted_cards = sorted(self.cards.values(), key=lambda c: natural_sort_key(c.base_name))

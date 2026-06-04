@@ -80,6 +80,23 @@
         </div>
     </main>
 
+    <!-- Modal for selecting a missing global back -->
+    <div id="back-selection-modal" class="modal hidden">
+        <div class="modal-content glass-container">
+            <h2>Select Default Card Back</h2>
+            <p>We couldn't find a default 'back.png' file. Please select one of the following files to be used as the back for all cards missing their own back:</p>
+            
+            <div class="candidates-grid" id="candidates-grid">
+                <!-- Image candidates will be injected here via JS -->
+            </div>
+            
+            <div class="modal-actions">
+                <button class="secondary-btn" id="btn-cancel-modal">Cancel</button>
+                <button class="primary-btn" id="btn-confirm-modal" disabled>Confirm & Generate</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/script.js"></script>
 </body>
 </html>

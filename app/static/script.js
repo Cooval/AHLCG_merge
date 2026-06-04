@@ -182,6 +182,102 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
+    const modal = document.getElementById('back-selection-modal');
+    const candidatesGrid = document.getElementById('candidates-grid');
+    const btnCancelModal = document.getElementById('btn-cancel-modal');
+    const btnConfirmModal = document.getElementById('btn-confirm-modal');
+    
+    let currentJobId = null;
+    let selectedCandidate = null;
+    let currentConsoleEl = null;
+    let currentBtn = null;
+    let currentProgressContainer = null;
+    let currentDefaultFilename = null;
+
+    const closeAndResetModal = () => {
+        modal.classList.add('hidden');
+        candidatesGrid.innerHTML = '';
+        currentJobId = null;
+        selectedCandidate = null;
+        btnConfirmModal.disabled = true;
+        
+        if (currentBtn) setLoading(currentBtn, false);
+        if (currentProgressContainer) currentProgressContainer.classList.add('hidden');
+    };
+
+    btnCancelModal.addEventListener('click', closeAndResetModal);
+
+    btnConfirmModal.addEventListener('click', async () => {
+        if (!selectedCandidate || !currentJobId) return;
+        
+        btnConfirmModal.disabled = true;
+        const formData = new FormData();
+        formData.append('filename', selectedCandidate);
+        
+        try {
+            const response = await fetch('/api/merge/select_back/' + currentJobId, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) throw new Error("Failed to select back");
+            
+            modal.classList.add('hidden');
+            startSSE(currentJobId, currentConsoleEl, currentBtn, currentProgressContainer, currentDefaultFilename);
+        } catch (e) {
+            showNotification('Error selecting back image.', 'error');
+            closeAndResetModal();
+        }
+    });
+
+    const handleProcessStart = (data, consoleEl, btn, progressContainer, defaultFilename) => {
+        if (data.status === 'needs_back') {
+            currentJobId = data.job_id;
+            currentConsoleEl = consoleEl;
+            currentBtn = btn;
+            currentProgressContainer = progressContainer;
+            currentDefaultFilename = defaultFilename;
+            
+            candidatesGrid.innerHTML = '';
+            
+            if (!data.candidates || data.candidates.length === 0) {
+                showNotification("No global back candidates found and some cards are missing backs. Processing failed.", "error");
+                setLoading(btn, false);
+                progressContainer.classList.add('hidden');
+                return;
+            }
+            
+            data.candidates.forEach(filename => {
+                const item = document.createElement('div');
+                item.className = 'candidate-item';
+                
+                const img = document.createElement('img');
+                img.src = `/api/merge/preview/${data.job_id}/${filename}`;
+                img.alt = filename;
+                
+                const label = document.createElement('div');
+                label.className = 'candidate-name';
+                label.textContent = filename;
+                
+                item.appendChild(img);
+                item.appendChild(label);
+                
+                item.addEventListener('click', () => {
+                    document.querySelectorAll('.candidate-item').forEach(el => el.classList.remove('selected'));
+                    item.classList.add('selected');
+                    selectedCandidate = filename;
+                    btnConfirmModal.disabled = false;
+                });
+                
+                candidatesGrid.appendChild(item);
+            });
+            
+            modal.classList.remove('hidden');
+        } else if (data.status === 'ready') {
+            startSSE(data.job_id, consoleEl, btn, progressContainer, defaultFilename);
+        }
+    };
+
     // Actions
     btnUpload.addEventListener('click', () => {
         if (selectedFiles.length === 0) return;
@@ -216,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         xhr.onload = () => {
             if (xhr.status === 200 && xhr.response.job_id) {
                 uploadProgressText.textContent = `Server processing...`;
-                startSSE(xhr.response.job_id, uploadConsole, btnUpload, uploadProgressContainer, 'Ready_Cards.pdf');
+                handleProcessStart(xhr.response, uploadConsole, btnUpload, uploadProgressContainer, 'Ready_Cards.pdf');
             } else {
                 let errorMsg = 'An unknown error occurred';
                 if (xhr.response && xhr.response.detail) {
@@ -269,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.job_id) {
                 gdriveProgressText.textContent = 'Server processing...';
-                startSSE(data.job_id, gdriveConsole, btnGdrive, gdriveProgressContainer, 'Cards_GDrive.pdf');
+                handleProcessStart(data, gdriveConsole, btnGdrive, gdriveProgressContainer, 'Cards_GDrive.pdf');
             }
         } catch (error) {
             showNotification(error.message, 'error');
