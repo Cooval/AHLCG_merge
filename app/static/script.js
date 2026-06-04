@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('file-input');
     const fileList = document.getElementById('file-list');
     const btnUpload = document.getElementById('btn-upload');
+    const btnClearUpload = document.getElementById('btn-clear-upload');
     let selectedFiles = [];
 
     const handleFiles = (files) => {
@@ -31,8 +32,21 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedFiles = validFiles;
         fileList.textContent = `${selectedFiles.length} files selected.`;
         btnUpload.disabled = false;
+        btnClearUpload.classList.remove('hidden');
         hideNotification();
     };
+
+    const clearUploadState = () => {
+        selectedFiles = [];
+        fileInput.value = '';
+        fileList.textContent = '';
+        btnUpload.disabled = true;
+        btnClearUpload.classList.add('hidden');
+        uploadProgressContainer.classList.add('hidden');
+        uploadConsole.textContent = '';
+    };
+
+    btnClearUpload.addEventListener('click', clearUploadState);
 
     dropZone.addEventListener('click', () => fileInput.click());
     
@@ -132,6 +146,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     a.remove();
                     
                     showNotification('The PDF file has been generated and download has started!', 'success');
+                    
+                    if (btn === btnUpload) {
+                        clearUploadState();
+                    }
                 } catch(err) {
                     showNotification("Failed to start download.", 'error');
                 } finally {

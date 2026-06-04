@@ -50,10 +50,13 @@
                 <div class="console-box" id="upload-console"></div>
             </div>
             
-            <button class="primary-btn action-btn" id="btn-upload" disabled>
-                <span class="btn-text">Generate PDF from files</span>
-                <div class="loader hidden"></div>
-            </button>
+            <div class="action-buttons" style="display: flex; gap: 10px; width: 100%;">
+                <button class="primary-btn action-btn" id="btn-upload" disabled style="flex: 1; width: auto;">
+                    <span class="btn-text">Generate PDF from files</span>
+                    <div class="loader hidden"></div>
+                </button>
+                <button class="secondary-btn hidden" id="btn-clear-upload" style="padding: 16px; border-radius: 12px;">Wyczyść</button>
+            </div>
         </section>
 
         <!-- Section 2: Google Drive link -->
