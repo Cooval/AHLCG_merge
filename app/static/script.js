@@ -159,10 +159,14 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
 
-    const modal = document.getElementById('back-selection-modal');
-    const candidatesGrid = document.getElementById('candidates-grid');
+    const modal = document.getElementById('resolution-modal');
     const btnCancelModal = document.getElementById('btn-cancel-modal');
-    const btnConfirmModal = document.getElementById('btn-confirm-modal');
+    const btnConfirmResolution = document.getElementById('btn-confirm-resolution');
+    
+    const globalBackSection = document.getElementById('global-back-section');
+    const candidatesGrid = document.getElementById('candidates-grid');
+    const conflictsSection = document.getElementById('conflicts-section');
+    const conflictsList = document.getElementById('conflicts-list');
     
     let currentJobId = null;
     let selectedCandidate = null;
@@ -174,9 +178,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeAndResetModal = () => {
         modal.classList.add('hidden');
         candidatesGrid.innerHTML = '';
+        conflictsList.innerHTML = '';
+        globalBackSection.classList.add('hidden');
+        conflictsSection.classList.add('hidden');
+        
         currentJobId = null;
         selectedCandidate = null;
-        btnConfirmModal.disabled = true;
+        btnConfirmResolution.disabled = true;
         
         if (currentBtn) setLoading(currentBtn, false);
         if (currentProgressContainer) currentProgressContainer.classList.add('hidden');
@@ -184,31 +192,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnCancelModal.addEventListener('click', closeAndResetModal);
 
-    btnConfirmModal.addEventListener('click', async () => {
-        if (!selectedCandidate || !currentJobId) return;
+    btnConfirmResolution.addEventListener('click', async () => {
+        if (!currentJobId) return;
         
-        btnConfirmModal.disabled = true;
-        const formData = new FormData();
-        formData.append('filename', selectedCandidate);
+        btnConfirmResolution.disabled = true;
+        
+        const payload = {
+            selected_back: selectedCandidate,
+            alt_keeps: [],
+            old_keeps: [],
+            unmatched_keeps: []
+        };
+        
+        // Zbieranie konfliktów
+        document.querySelectorAll('input[type="checkbox"][data-type="alt_conflict"]:checked').forEach(cb => {
+            payload.alt_keeps.push(cb.value);
+        });
+        document.querySelectorAll('input[type="checkbox"][data-type="skipped_old"]:checked').forEach(cb => {
+            payload.old_keeps.push(cb.value);
+        });
+        document.querySelectorAll('input[type="checkbox"][data-type="skipped_unmatched"]:checked').forEach(cb => {
+            payload.unmatched_keeps.push(cb.value);
+        });
         
         try {
-            const response = await fetch('/api/merge/select_back/' + currentJobId, {
+            const response = await fetch('/api/merge/resolve_conflicts/' + currentJobId, {
                 method: 'POST',
-                body: formData
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
             });
             
-            if (!response.ok) throw new Error("Failed to select back");
+            if (!response.ok) throw new Error("Failed to resolve conflicts");
             
             modal.classList.add('hidden');
+            btnConfirmResolution.disabled = false;
             startSSE(currentJobId, currentConsoleEl, currentBtn, currentProgressContainer, currentDefaultFilename);
         } catch (e) {
-            showNotification('Error selecting back image.', 'error');
+            showNotification('Błąd podczas rozwiązywania konfliktów.', 'error');
             closeAndResetModal();
+            btnConfirmResolution.disabled = false;
         }
     });
 
     const handleProcessStart = (data, consoleEl, btn, progressContainer, defaultFilename) => {
-        if (data.status === 'needs_back') {
+        if (data.status === 'needs_resolution') {
             currentJobId = data.job_id;
             currentConsoleEl = consoleEl;
             currentBtn = btn;
@@ -216,38 +245,109 @@ document.addEventListener('DOMContentLoaded', () => {
             currentDefaultFilename = defaultFilename;
             
             candidatesGrid.innerHTML = '';
+            conflictsList.innerHTML = '';
+            globalBackSection.classList.add('hidden');
+            conflictsSection.classList.add('hidden');
+            selectedCandidate = null;
             
-            if (!data.candidates || data.candidates.length === 0) {
-                showNotification("No global back candidates found and some cards are missing backs. Processing failed.", "error");
-                setLoading(btn, false);
-                progressContainer.classList.add('hidden');
-                return;
+            // 1. Global Back Selection
+            if (data.needs_back) {
+                btnConfirmResolution.disabled = true;
+                
+                if (!data.back_candidates || data.back_candidates.length === 0) {
+                    showNotification("Nie znaleziono kandydatów na rewers, a część kart nie ma rewersu. Proces przerwany.", "error");
+                    setLoading(btn, false);
+                    progressContainer.classList.add('hidden');
+                    return;
+                }
+                
+                globalBackSection.classList.remove('hidden');
+                
+                data.back_candidates.forEach(filename => {
+                    const item = document.createElement('div');
+                    item.className = 'candidate-item';
+                    
+                    const img = document.createElement('img');
+                    img.src = `/api/merge/preview/${data.job_id}/${filename}`;
+                    img.alt = filename;
+                    
+                    const label = document.createElement('div');
+                    label.className = 'candidate-name';
+                    label.textContent = filename;
+                    
+                    item.appendChild(img);
+                    item.appendChild(label);
+                    
+                    item.addEventListener('click', () => {
+                        document.querySelectorAll('.candidate-item').forEach(el => el.classList.remove('selected'));
+                        item.classList.add('selected');
+                        selectedCandidate = filename;
+                        btnConfirmResolution.disabled = false;
+                    });
+                    
+                    candidatesGrid.appendChild(item);
+                });
+            } else {
+                btnConfirmResolution.disabled = false;
             }
             
-            data.candidates.forEach(filename => {
-                const item = document.createElement('div');
-                item.className = 'candidate-item';
+            // 2. Conflicts
+            if (data.conflicts && data.conflicts.length > 0) {
+                conflictsSection.classList.remove('hidden');
                 
-                const img = document.createElement('img');
-                img.src = `/api/merge/preview/${data.job_id}/${filename}`;
-                img.alt = filename;
-                
-                const label = document.createElement('div');
-                label.className = 'candidate-name';
-                label.textContent = filename;
-                
-                item.appendChild(img);
-                item.appendChild(label);
-                
-                item.addEventListener('click', () => {
-                    document.querySelectorAll('.candidate-item').forEach(el => el.classList.remove('selected'));
-                    item.classList.add('selected');
-                    selectedCandidate = filename;
-                    btnConfirmModal.disabled = false;
+                data.conflicts.forEach(conflict => {
+                    const cItem = document.createElement('div');
+                    cItem.className = 'conflict-item';
+                    
+                    const header = document.createElement('div');
+                    header.className = 'conflict-header';
+                    header.textContent = conflict.description;
+                    cItem.appendChild(header);
+                    
+                    const optionsDiv = document.createElement('div');
+                    optionsDiv.className = 'conflict-options';
+                    
+                    conflict.options.forEach(opt => {
+                        const optDiv = document.createElement('label');
+                        optDiv.className = 'conflict-option';
+                        
+                        const img = document.createElement('img');
+                        img.src = `/api/merge/preview/${data.job_id}/${opt.filename}`;
+                        
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        cb.dataset.type = conflict.type;
+                        cb.value = opt.base_name || opt.filename;
+                        
+                        // Zaznacz mylnie jako checked by domyślnie sugerować "weź" (albo zostawmy puste dla alt)
+                        if (conflict.type !== 'alt_conflict') {
+                            // old i unmatched - domyślnie odznaczone
+                        } else {
+                            // alt_conflict domyślnie odznaczone
+                        }
+                        
+                        const textSpan = document.createElement('span');
+                        textSpan.textContent = opt.label;
+                        
+                        cb.addEventListener('change', () => {
+                            if (cb.checked) {
+                                optDiv.classList.add('selected');
+                            } else {
+                                optDiv.classList.remove('selected');
+                            }
+                        });
+                        
+                        optDiv.appendChild(img);
+                        optDiv.appendChild(cb);
+                        optDiv.appendChild(textSpan);
+                        
+                        optionsDiv.appendChild(optDiv);
+                    });
+                    
+                    cItem.appendChild(optionsDiv);
+                    conflictsList.appendChild(cItem);
                 });
-                
-                candidatesGrid.appendChild(item);
-            });
+            }
             
             modal.classList.remove('hidden');
         } else if (data.status === 'ready') {

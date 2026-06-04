@@ -10,7 +10,14 @@ from typing import List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 import gdown
+
+class ResolutionRequest(BaseModel):
+    selected_back: str | None = None
+    alt_keeps: List[str] = []
+    old_keeps: List[str] = []
+    unmatched_keeps: List[str] = []
 
 # Configure path for local module
 import sys
@@ -107,9 +114,18 @@ async def merge_upload(files: List[UploadFile] = File(...)):
         merger = DeckMerger(temp_dir)
         merger.parse_directory()
         
-        if merger.needs_global_back() and not merger.global_back:
-            candidates = merger.get_back_candidates()
-            return {"job_id": os.path.basename(temp_dir), "status": "needs_back", "candidates": candidates}
+        conflicts = merger.get_conflicts()
+        needs_back = merger.needs_global_back() and not merger.global_back
+        back_candidates = merger.get_back_candidates() if needs_back else []
+        
+        if conflicts or needs_back:
+            return {
+                "job_id": os.path.basename(temp_dir),
+                "status": "needs_resolution",
+                "needs_back": needs_back,
+                "back_candidates": back_candidates,
+                "conflicts": conflicts
+            }
             
         return {"job_id": os.path.basename(temp_dir), "status": "ready"}
         
@@ -142,9 +158,18 @@ async def merge_gdrive(url: str = Form(...)):
         merger = DeckMerger(temp_dir)
         merger.parse_directory()
         
-        if merger.needs_global_back() and not merger.global_back:
-            candidates = merger.get_back_candidates()
-            return {"job_id": os.path.basename(temp_dir), "status": "needs_back", "candidates": candidates}
+        conflicts = merger.get_conflicts()
+        needs_back = merger.needs_global_back() and not merger.global_back
+        back_candidates = merger.get_back_candidates() if needs_back else []
+        
+        if conflicts or needs_back:
+            return {
+                "job_id": os.path.basename(temp_dir),
+                "status": "needs_resolution",
+                "needs_back": needs_back,
+                "back_candidates": back_candidates,
+                "conflicts": conflicts
+            }
             
         return {"job_id": os.path.basename(temp_dir), "status": "ready"}
         
@@ -194,17 +219,60 @@ async def merge_preview(job_id: str, filename: str):
         
     return FileResponse(path=file_path)
 
-@app.post("/api/merge/select_back/{job_id}")
-async def merge_select_back(job_id: str, filename: str = Form(...)):
-    """Endpoint to set the selected file as the global back."""
+@app.post("/api/merge/resolve_conflicts/{job_id}")
+async def merge_resolve_conflicts(job_id: str, request: ResolutionRequest):
+    """Endpoint handling all user resolutions from the UI."""
     temp_dir = os.path.join(tempfile.gettempdir(), job_id)
-    file_path = os.path.join(temp_dir, filename)
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Selected image not found")
+    if not os.path.exists(temp_dir):
+        raise HTTPException(status_code=404, detail="Job ID not found")
         
-    # Rename the selected file to "back.png" so DeckMerger finds it automatically
-    dest_path = os.path.join(temp_dir, "back.png")
-    shutil.move(file_path, dest_path)
+    merger = DeckMerger(temp_dir)
+    merger.parse_directory()
     
+    # Resolve global back
+    if request.selected_back:
+        file_path = os.path.join(temp_dir, request.selected_back)
+        if os.path.exists(file_path):
+            dest_path = os.path.join(temp_dir, "back.png")
+            shutil.move(file_path, dest_path)
+            
+    # Resolve alt conflicts
+    # We must delete the files of cards that share an alt norm group but were not selected in alt_keeps
+    from collections import defaultdict
+    import re
+    groups = defaultdict(list)
+    for base_name, card in merger.cards.items():
+        norm = re.sub(r'(?i)alt', '', base_name)
+        norm = re.sub(r'\s*\(.*?\)', '', norm).strip()
+        groups[norm].append(card)
+        
+    for norm, cards in groups.items():
+        if len(cards) > 1:
+            for c in cards:
+                if c.base_name not in request.alt_keeps:
+                    if c.front_path and os.path.exists(c.front_path):
+                        os.remove(c.front_path)
+                    if c.back_path and os.path.exists(c.back_path):
+                        os.remove(c.back_path)
+                        
+    # Resolve skipped OLD
+    for p in merger.skipped_old:
+        if p.name in request.old_keeps:
+            # strip -OLD- and -old-
+            new_name = p.name.replace("-OLD-", "").replace("-old-", "")
+            shutil.move(str(p), os.path.join(temp_dir, new_name))
+        else:
+            if p.exists():
+                os.remove(str(p))
+                
+    # Resolve unmatched
+    for p in merger.skipped_unmatched:
+        if p.name in request.unmatched_keeps:
+            # append -a.png to force treating it as a front side
+            new_name = p.name[:-4] + "-a.png"
+            shutil.move(str(p), os.path.join(temp_dir, new_name))
+        else:
+            if p.exists():
+                os.remove(str(p))
+
     return {"status": "success"}

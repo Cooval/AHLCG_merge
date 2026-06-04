@@ -4,6 +4,7 @@ import sys
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Any
+from collections import defaultdict
 import img2pdf
 
 # Suppress spam from the img2pdf library regarding the alpha channel
@@ -64,7 +65,8 @@ class DeckMerger:
         self.input_dir = Path(input_dir)
         self.cards: Dict[str, Card] = {}
         self.global_back: Optional[Path] = None
-        self.skipped_files: List[str] = []
+        self.skipped_old: List[Path] = []
+        self.skipped_unmatched: List[Path] = []
 
     def parse_directory(self) -> None:
         if not self.input_dir.is_dir():
@@ -76,7 +78,7 @@ class DeckMerger:
             
             # Verification of obsolete files marked with the -OLD- tag
             if "-OLD-" in file_path.name.upper():
-                self.skipped_files.append(file_path.name)
+                self.skipped_old.append(file_path)
                 continue
                 
             if file_path.name.lower() in self.GLOBAL_BACK_NAMES:
@@ -84,9 +86,13 @@ class DeckMerger:
                     self.global_back = file_path
                 continue
 
+            # Also skip files starting with underscore explicitly so they don't become unmatched conflicts
+            if file_path.name.startswith("_"):
+                continue
+
             match = self.FILENAME_PATTERN.match(file_path.name)
             if not match:
-                self.skipped_files.append(file_path.name)
+                self.skipped_unmatched.append(file_path)
                 continue
 
             base_name, qty_str, side_flag = match.groups()
@@ -123,6 +129,53 @@ class DeckMerger:
             if name.startswith("_") or "back" in name.lower():
                 candidates.append(name)
         return candidates
+
+    def get_conflicts(self) -> List[Dict[str, Any]]:
+        """Returns a list of conflicts (alt cards, OLD cards, unmatched cards) that need user resolution."""
+        conflicts = []
+        
+        # 1. Alt cards
+        groups = defaultdict(list)
+        for base_name, card in self.cards.items():
+            norm = re.sub(r'(?i)alt', '', base_name)
+            norm = re.sub(r'\s*\(.*?\)', '', norm).strip()
+            groups[norm].append(card)
+            
+        for norm, cards in groups.items():
+            if len(cards) > 1:
+                # We have multiple cards that map to the same normalized base name
+                options = [{"filename": c.front_path.name, "label": c.base_name, "base_name": c.base_name} for c in cards if c.front_path]
+                if len(options) > 1:
+                    conflicts.append({
+                        "id": f"alt_{norm}",
+                        "type": "alt_conflict",
+                        "description": f"Zdublowane karty o tym samym numerze: '{norm}'",
+                        "options": options
+                    })
+                    
+        # 2. Skipped OLD
+        for p in self.skipped_old:
+            conflicts.append({
+                "id": f"old_{p.name}",
+                "type": "skipped_old",
+                "description": f"Pominięta karta OLD: {p.name}",
+                "options": [
+                    {"filename": p.name, "label": "Dołącz do wydruku"}
+                ]
+            })
+            
+        # 3. Skipped Unmatched
+        for p in self.skipped_unmatched:
+            conflicts.append({
+                "id": f"unmatched_{p.name}",
+                "type": "skipped_unmatched",
+                "description": f"Plik o nierozpoznanej nazwie: {p.name}",
+                "options": [
+                    {"filename": p.name, "label": "Dołącz do wydruku (zostanie dodany jako front)"}
+                ]
+            })
+            
+        return conflicts
 
     def build_page_sequence(self) -> List[str]:
         pages: List[str] = []
@@ -196,7 +249,7 @@ class DeckMerger:
             "total_pages": len(pages),
             "unique_cards": len(self.cards),
             "repeated_cards": repeated_cards,
-            "skipped_files": self.skipped_files
+            "skipped_files": [p.name for p in self.skipped_old + self.skipped_unmatched]
         }
         
         msg_done = f"Success! PDF generated with {stats['total_pages']} pages across {stats['unique_cards']} unique cards."
