@@ -93,32 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Handle PDF download from blob response
-    const handleDownloadBlob = (blob, defaultFilename, responseHeaders) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        let filename = defaultFilename;
-        // The headers string might be available from XHR
-        if (typeof responseHeaders === 'string') {
-            const contentDispositionMatch = responseHeaders.match(/content-disposition:\s*.*filename=["']?([^"';]+)["']?/i);
-            if (contentDispositionMatch && contentDispositionMatch[1]) {
-                filename = contentDispositionMatch[1];
-            }
-        } else if (responseHeaders && responseHeaders.get) {
-            const contentDisposition = responseHeaders.get('content-disposition');
-            if (contentDisposition && contentDisposition.indexOf('filename=') !== -1) {
-                filename = contentDisposition.split('filename=')[1].replace(/["']/g, '');
-            }
-        }
-
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    };
+    // handleDownloadBlob deleted in favor of native browser downloading
 
     // Progress UI Elements
     const uploadProgressContainer = document.getElementById('upload-progress-container');
@@ -142,21 +117,23 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const eventSource = new EventSource('/api/merge/process/' + jobId);
         
-        eventSource.onmessage = async (e) => {
+        eventSource.onmessage = (e) => {
             const data = e.data;
             if (data === "DONE") {
                 eventSource.close();
                 appendLog(consoleEl, "Processing complete! Downloading PDF...");
                 
                 try {
-                    const dlResponse = await fetch('/api/merge/download/' + jobId);
-                    if (!dlResponse.ok) throw new Error("Download failed");
+                    const a = document.createElement('a');
+                    a.href = '/api/merge/download/' + jobId;
+                    a.download = defaultFilename;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
                     
-                    const blob = await dlResponse.blob();
-                    handleDownloadBlob(blob, defaultFilename, dlResponse.headers);
-                    showNotification('The PDF file has been successfully generated and downloaded!', 'success');
+                    showNotification('The PDF file has been generated and download has started!', 'success');
                 } catch(err) {
-                    showNotification("Failed to download PDF.", 'error');
+                    showNotification("Failed to start download.", 'error');
                 } finally {
                     setLoading(btn, false);
                     progressContainer.classList.add('hidden');
