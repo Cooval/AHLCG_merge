@@ -258,8 +258,21 @@ async def merge_resolve_conflicts(job_id: str, request: ResolutionRequest):
     # Resolve skipped OLD
     for p in merger.skipped_old:
         if p.name in request.old_keeps:
-            # strip -OLD- and -old-
-            new_name = p.name.replace("-OLD-", "").replace("-old-", "")
+            import re
+            # Safely remove -OLD- or -old- without destroying adjacent hyphens
+            new_name = re.sub(r'(?i)-old(-?)', r'\1', p.name)
+            
+            # Ensure the new name actually matches the card pattern with a valid side_flag
+            match = merger.FILENAME_PATTERN.match(new_name)
+            valid = False
+            if match:
+                side_flag = match.group(3)
+                if side_flag and side_flag.lower() in (merger.FRONT_FLAGS | merger.BACK_FLAGS):
+                    valid = True
+                    
+            if not valid:
+                new_name = new_name[:-4] + "-a.png"
+                
             shutil.move(str(p), os.path.join(temp_dir, new_name))
         else:
             if p.exists():
